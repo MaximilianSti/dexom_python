@@ -8,9 +8,9 @@ import sys
 
 requirements = [
         'cobra',
-        'numpy',
+        'numpy==1.20',
         'six',
-        'scipy',
+        'scipy==1.7',
         'symengine',
         'matplotlib',
         'sklearn',
