@@ -145,7 +145,7 @@ def get_all_reactions_from_model(model, save=True, shuffle=False, out_path=""):
     return rxn_list
 
 
-def get_subsytems_from_model(model, save=True, out_path=""):
+def get_subsystems_from_model(model, save=True, out_path=""):
     """
     Creates a list of all subsystems of a model and their associated reactions
     Parameters
@@ -177,16 +177,14 @@ def get_subsytems_from_model(model, save=True, out_path=""):
     return rxn_sub, sub_list
 
 
-def recon2_gpr(model, gene_file, genename="ID", genescore="t", save=True, filename="recon2_weights"):
+def recon2_gpr(model, gene_weights, save=True, filename="recon2_weights"):
     """
     Applies the GPR rules from the recon2 or recon2.2 model for creating reaction weights
 
     Parameters
     ----------
     model: a cobrapy model
-    gene_file: the path to a csv file containing gene scores
-    genename: the column containing the gene IDs
-    genescore: the column containing the gene scores
+    gene_weights: a dictionary containing gene IDs & weights
     save: if True, saves the reaction weights as a csv file
 
     Returns
@@ -194,10 +192,6 @@ def recon2_gpr(model, gene_file, genename="ID", genescore="t", save=True, filena
     reaction_weights: dict where keys = reaction IDs and values = weights
     """
     reaction_weights = {}
-    genes = pd.read_csv(gene_file)
-    gene_weights = pd.DataFrame(genes[genescore])
-    gene_weights.index = genes[genename]
-    gene_weights = {idx.replace(':', '_'): np.max(gene_weights.loc[idx][genescore]) for idx in gene_weights.index}
 
     for rxn in model.reactions:
         if len(rxn.genes) > 0:
@@ -208,18 +202,15 @@ def recon2_gpr(model, gene_file, genename="ID", genescore="t", save=True, filena
             new_weights = {g: gene_weights.get(g, 0) for g in gen_list}
             negweights = []
             for g, v in new_weights.items():
-                if v < 0 and -v not in new_weights.values():
-                    new_weights[g] = -v
-                    negweights.append(-v)
-                elif v < 0:
-                    new_weights[g] = -v + 0.001
+                if v < 0:
+                    new_weights[g] = -v - 1e-15
                     negweights.append(-v)
             expression = ' '.join(expr_split).replace('or', '*').replace('and', '+')
-            weight = sympify(expression,  evaluate=False).replace(Mul, Max).replace(Add, Min).subs(new_weights, n=21)
-            if weight - 0.001 in negweights:
-                weight = -v + 0.001
-            elif weight in negweights:
-                weight = -weight
+            # weight = sympify(expression).xreplace({Mul: Max}).xreplace({Add: Min})
+            weight = replace_MulMax_AddMin(sympify(expression))
+            reaction_weights[rxn.id] = weight.subs(new_weights)
+            if weight + 1e-15 in negweights:
+                weight = -weight - 1e-15
             reaction_weights[rxn.id] = weight
         else:
             reaction_weights[rxn.id] = 0
@@ -228,7 +219,7 @@ def recon2_gpr(model, gene_file, genename="ID", genescore="t", save=True, filena
     return reaction_weights
 
 
-def recon1_gpr(model, gene_file, genename="ID", genescore="t", save=True):
+def recon1_gpr(model, gene_weights, save=True, filename="recon1_weights"):
     """
     Applies the GPR rules from the recon1 model
     Parameters
@@ -245,11 +236,6 @@ def recon1_gpr(model, gene_file, genename="ID", genescore="t", save=True):
     """
     reaction_weights = {}
 
-    genes = pd.read_csv(gene_file)
-    gene_weights = pd.DataFrame(genes[genescore])
-    gene_weights.index = genes[genename]
-    gene_weights = {"g_"+str(idx): np.max(gene_weights.loc[idx][genescore]) for idx in gene_weights.index}
-
     for rxn in model.reactions:
         if len(rxn.genes) > 0:
             expr_split = rxn.gene_reaction_rule.replace("(", "( ").replace(")", " )").split()
@@ -259,27 +245,24 @@ def recon1_gpr(model, gene_file, genename="ID", genescore="t", save=True):
             new_weights = {g: gene_weights.get(g, 0) for g in gen_list}
             negweights = []
             for g, v in new_weights.items():
-                if v < 0 and -v not in new_weights.values():
-                    new_weights[g] = -v
-                    negweights.append(-v)
-                elif v < 0:
-                    new_weights[g] = -v + 0.001
+                if v < 0:
+                    new_weights[g] = -v - 1e-15
                     negweights.append(-v)
             expression = ' '.join(expr_split).replace('or', '*').replace('and', '+')
-            weight = sympify(expression, evaluate=False).replace(Mul, Max).replace(Add, Min).subs(new_weights, n=21)
-            if weight - 0.001 in negweights:
-                weight = -v + 0.001
-            elif weight in negweights:
-                weight = -weight
+            # weight = sympify(expression).xreplace({Mul: Max}).xreplace({Add: Min})
+            weight = replace_MulMax_AddMin(sympify(expression))
+            reaction_weights[rxn.id] = weight.subs(new_weights)
+            if weight + 1e-15 in negweights:
+                weight = -weight - 1e-15
             reaction_weights[rxn.id] = weight
         else:
             reaction_weights[rxn.id] = 0
     if save:
-        save_reaction_weights(reaction_weights, "recon1_weights.csv")
+        save_reaction_weights(reaction_weights, filename+".csv")
     return reaction_weights
 
 
-def iMM1865_gpr(model, gene_file, genename="ID", genescore="t", save=True):
+def iMM1865_gpr(model, gene_weights, save=True, filename="iMM1865_weights"):
     """
     Applies the GPR rules from the iMM1865 model
     Parameters
@@ -296,11 +279,6 @@ def iMM1865_gpr(model, gene_file, genename="ID", genescore="t", save=True):
     """
     reaction_weights = {}
 
-    genes = pd.read_csv(gene_file)
-    gene_weights = pd.DataFrame(genes[genescore])
-    gene_weights.index = genes[genename]
-    gene_weights = {"g_"+str(idx): np.max(gene_weights.loc[idx][genescore]) for idx in gene_weights.index}
-
     for rxn in model.reactions:
         if len(rxn.genes) > 0:
             expr_split = rxn.gene_reaction_rule.split()
@@ -310,29 +288,24 @@ def iMM1865_gpr(model, gene_file, genename="ID", genescore="t", save=True):
             new_weights = {g: gene_weights.get(g, 0) for g in gen_list}
             negweights = []
             for g, v in new_weights.items():
-                if v < 0 and -v not in new_weights.values():
-                    new_weights[g] = -v
+                if v < 0:
+                    new_weights[g] = -v - 1e-15
                     negweights.append(-v)
-                elif v < 0:
-                    new_weights[g] = -v + 0.001
-                    negweights.append(-v)
-            expression = " ".join(expr_split).replace("or", "*").replace("and", "+")
-            # with evaluate(False):
-            weight = sympify(expression).replace(Mul, Max).replace(Add, Min)
-            weight.subs(new_weights, n=21)
-            if weight - 0.001 in negweights:
-                weight = -v + 0.001
-            elif weight in negweights:
-                weight = -weight
+            expression = ' '.join(expr_split).replace('or', '*').replace('and', '+')
+            # weight = sympify(expression).xreplace({Mul: Max}).xreplace({Add: Min})
+            weight = replace_MulMax_AddMin(sympify(expression))
+            reaction_weights[rxn.id] = weight.subs(new_weights)
+            if weight + 1e-15 in negweights:
+                weight = -weight - 1e-15
             reaction_weights[rxn.id] = weight
         else:
             reaction_weights[rxn.id] = 0
     if save:
-        save_reaction_weights(reaction_weights, "iMM1865_weights.csv")
+        save_reaction_weights(reaction_weights, filename+".csv")
     return reaction_weights
 
 
-def human1_gpr(model, gene_weights, genename="gene_IDs", genescore="percfilt1", save=True, filename="human1_weights"):
+def human1_gpr(model, gene_weights, save=True, filename="human1_weights"):
     """
     Applies the GPR rules from the human-GEM model for creating reaction weights
 
@@ -349,17 +322,13 @@ def human1_gpr(model, gene_weights, genename="gene_IDs", genescore="percfilt1", 
     reaction_weights: dict where keys = reaction IDs and values = weights
     """
     reaction_weights = {}
-    # genes = pd.read_csv(gene_file)
-    # gene_weights = pd.DataFrame(genes[genescore])
-    # gene_weights.index = genes[genename]
-    # gene_weights = {idx: np.max(gene_weights.loc[idx][genescore]) for idx in gene_weights.index}
     for rxn in model.reactions:
         if len(rxn.genes) > 0:
             expr_split = rxn.gene_reaction_rule.replace("(", "( ").replace(")", " )").split()
             gen_list = set(rxn.genes)  #set([s for s in rxngenes if 'ENSG' in s])
             new_weights = {g.id: gene_weights.get(g.id, 0) for g in gen_list}
             expression = ' '.join(expr_split).replace('or', '*').replace('and', '+')
-            # weight = weight.xreplace({Mul: Max}).xreplace({Add: Min})
+            # weight = sympify(expression).xreplace({Mul: Max}).xreplace({Add: Min})
             weight = replace_MulMax_AddMin(sympify(expression))
             reaction_weights[rxn.id] = weight.subs(new_weights)
         else:
@@ -371,24 +340,25 @@ def human1_gpr(model, gene_weights, genename="gene_IDs", genescore="percfilt1", 
 
 if __name__ == "__main__":
 
-    description = "Applies GPR rules from recon 2 model and saves reaction weights as a csv file"
+    description = "Applies GPR rules to transform gene weights into reaction weights"
 
     parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("-m", "--model", help="GEM in json, sbml or mat format")
     parser.add_argument("-n", "--modelname", default="human1", help="supported: human1, recon1, recon2, iMM1865")
     parser.add_argument("-g", "--gene_file", help="csv file containing gene HGNC identifiers and scores")
     parser.add_argument("-o", "--output", default="reaction_weights",
-                        help="Path to which the reaction_weights file is saved")
+                        help="Path to which the reaction_weights .csv file is saved")
     parser.add_argument("--gene_ID", default="ID", help="column containing the gene identifiers")
     parser.add_argument("--gene_score", default="t", help="column containing the gene scores")
     args = parser.parse_args()
 
     model = read_model(args.model)
-    model_list = {'human1':human1_gpr, 'recon1': recon1_gpr, 'recon2': recon2_gpr, 'iMM1865': iMM1865_gpr}
+    model_list = {'human1': human1_gpr, 'recon1': recon1_gpr, 'recon2': recon2_gpr, 'iMM1865': iMM1865_gpr}
 
     genes = pd.read_csv(args.gene_file)
     gene_weights = pd.Series(genes[args.gene_score], index=genes[args.gene_ID])
     # gene_weights = {idx: np.max(gene_weights.loc[idx][args.gene_score]) for idx in gene_weights.index}
+    # current behavior: all genes with several different weights are removed
     for x in set(gene_weights.index):
         if type(gene_weights[x]) != np.float64:
             if len(gene_weights[x].value_counts()) > 1:
