@@ -3,10 +3,8 @@ import six
 from symengine import Add, sympify
 from numpy import abs
 import argparse
-from pathlib import Path
 import time
-from cobra.io import load_json_model, read_sbml_model, load_matlab_model
-from dexom_python.model_functions import load_reaction_weights
+from dexom_python.model_functions import load_reaction_weights, read_model
 from dexom_python.result_functions import write_solution
 
 
@@ -54,10 +52,10 @@ def create_partial_variables(model, reaction_weights, epsilon):
                 y_neg = model.solver.interface.Variable("rh_%s_neg" % rid, type="binary")
                 pos_constraint = model.solver.interface.Constraint(
                     reaction.flux_expression + y_pos * (reaction.lower_bound - epsilon),
-                    lb=reaction.lower_bound, name="rh_%s_pos_bound" % rid)
+                    lb=reaction.lower_bound, name="rh_%s_lower" % rid)
                 neg_constraint = model.solver.interface.Constraint(
                     reaction.flux_expression + y_neg * (reaction.upper_bound + epsilon),
-                    ub=reaction.upper_bound, name="rh_%s_neg_bound" % rid)
+                    ub=reaction.upper_bound, name="rh_%s_upper" % rid)
                 model.solver.add(y_pos)
                 model.solver.add(y_neg)
                 model.solver.add(pos_constraint)
@@ -104,11 +102,6 @@ def imat(model, reaction_weights={}, epsilon=1e-2, threshold=1e-5, timelimit=Non
     full: bool
         if True, apply constraints on all reactions. if False, only on reactions with non-zero weights
     """
-    try:
-        model.solver = 'cplex'
-    except:
-        print("cplex is not available or not properly installed")
-
     y_variables = list()
     x_variables = list()
     y_weights = list()
@@ -177,16 +170,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    fileformat = Path(args.model).suffix
-    if fileformat == ".sbml" or fileformat == ".xml":
-        model = read_sbml_model(args.model)
-    elif fileformat == '.json':
-        model = load_json_model(args.model)
-    elif fileformat == ".mat":
-        model = load_matlab_model(args.model)
-    else:
-        print("Only SBML, JSON, and Matlab formats are supported for the models")
-        model = None
+    model = read_model(args.model)
 
     reaction_weights = {}
     if args.reaction_weights:

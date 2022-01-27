@@ -4,11 +4,9 @@ import six
 import time
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from cobra.io import load_json_model, load_matlab_model, read_sbml_model
 from dexom_python.imat import imat, create_partial_variables, create_full_variables
 from dexom_python.result_functions import read_solution, get_binary_sol, write_solution, get_obj_value_from_binary
-from dexom_python.model_functions import load_reaction_weights
+from dexom_python.model_functions import load_reaction_weights, read_model
 from dexom_python.enum_functions.enumeration import EnumSolution, get_recent_solution_and_iteration
 from dexom_python.enum_functions.icut import create_icut_constraint
 from dexom_python.enum_functions.maxdist import create_maxdist_constraint, create_maxdist_objective
@@ -155,21 +153,7 @@ if __name__ == "__main__":
     parser.add_argument("--save", action='store_true', help="Use this flag to save each individual solution")
     args = parser.parse_args()
 
-    fileformat = Path(args.model).suffix
-    if fileformat == ".sbml" or fileformat == ".xml":
-        model = read_sbml_model(args.model)
-    elif fileformat == '.json':
-        model = load_json_model(args.model)
-    elif fileformat == ".mat":
-        model = load_matlab_model(args.model)
-    else:
-        print("Only SBML, JSON, and Matlab formats are supported for the models")
-        model = None
-
-    try:
-        model.solver = 'cplex'
-    except:
-        print("cplex is not available or not properly installed")
+    model = read_model(args.model)
 
     reaction_weights = {}
     if args.reaction_weights:
