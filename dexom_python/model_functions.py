@@ -7,8 +7,6 @@ from cobra.io import load_json_model, read_sbml_model, load_matlab_model
 from pathlib import Path
 import argparse
 from symengine import sympify, Add, Mul, Max, Min
-# from sympy import sympify, Add, Mul, Max, Min
-# from sympy.core.parameters import evaluate
 
 
 def replace_MulMax_AddMin(expression):
@@ -26,15 +24,17 @@ def replace_MulMax_AddMin(expression):
 
 def read_model(modelfile):
     fileformat = Path(modelfile).suffix
+    model = None
     if fileformat == ".sbml" or fileformat == ".xml":
         model = read_sbml_model(modelfile)
     elif fileformat == '.json':
         model = load_json_model(modelfile)
     elif fileformat == ".mat":
         model = load_matlab_model(modelfile)
+    elif fileformat == "":
+        print("Wrong model path")
     else:
         print("Only SBML, JSON, and Matlab formats are supported for the models")
-        model = None
 
     try:
         model.solver = 'cplex'
@@ -226,8 +226,7 @@ def recon1_gpr(model, gene_weights, save=True, filename="recon1_weights"):
     ----------
     model: a cobrapy model
     gene_file: the path to a csv file containing gene scores
-    genename: the column containing the gene IDs
-    genescore: the column containing the gene scores
+    gene_weights: a dictionary containing gene IDs & weights
     save: if True, saves the reaction weights as a csv file
 
     Returns
@@ -269,8 +268,7 @@ def iMM1865_gpr(model, gene_weights, save=True, filename="iMM1865_weights"):
     ----------
     model: a cobrapy model
     gene_file: the path to a csv file containing gene scores
-    genename: the column containing the gene IDs
-    genescore: the column containing the gene scores
+    gene_weights: a dictionary containing gene IDs & weights
     save: if True, saves the reaction weights as a csv file
 
     Returns
@@ -313,8 +311,7 @@ def human1_gpr(model, gene_weights, save=True, filename="human1_weights"):
     ----------
     model: a cobrapy model
     gene_file: the path to a csv file containing gene scores
-    genename: the column containing the gene IDs
-    genescore: the column containing the gene scores
+    gene_weights: a dictionary containing gene IDs & weights
     save: if True, saves the reaction weights as a csv file
 
     Returns
@@ -327,10 +324,17 @@ def human1_gpr(model, gene_weights, save=True, filename="human1_weights"):
             expr_split = rxn.gene_reaction_rule.replace("(", "( ").replace(")", " )").split()
             gen_list = set(rxn.genes)  #set([s for s in rxngenes if 'ENSG' in s])
             new_weights = {g.id: gene_weights.get(g.id, 0) for g in gen_list}
+            negweights = []
+            for g, v in new_weights.items():
+                if v < 0:
+                    new_weights[g] = -v - 1e-15
+                    negweights.append(-v)
             expression = ' '.join(expr_split).replace('or', '*').replace('and', '+')
             # weight = sympify(expression).xreplace({Mul: Max}).xreplace({Add: Min})
-            weight = replace_MulMax_AddMin(sympify(expression))
-            reaction_weights[rxn.id] = weight.subs(new_weights)
+            weight = replace_MulMax_AddMin(sympify(expression)).subs(new_weights)
+            if weight + 1e-15 in negweights:
+                weight = -weight - 1e-15
+            reaction_weights[rxn.id] = weight
         else:
             reaction_weights[rxn.id] = 0.
     if save:
@@ -343,9 +347,9 @@ if __name__ == "__main__":
     description = "Applies GPR rules to transform gene weights into reaction weights"
 
     parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("-m", "--model", help="GEM in json, sbml or mat format")
-    parser.add_argument("-n", "--modelname", default="human1", help="supported: human1, recon1, recon2, iMM1865")
-    parser.add_argument("-g", "--gene_file", help="csv file containing gene HGNC identifiers and scores")
+    parser.add_argument("-m", "--model", help="GEM in json, sbml or matlab format")
+    parser.add_argument("-n", "--modelname", help="supported: human1, recon1, recon2, iMM1865")
+    parser.add_argument("-g", "--gene_file", help="csv file containing gene identifiers and scores")
     parser.add_argument("-o", "--output", default="reaction_weights",
                         help="Path to which the reaction_weights .csv file is saved")
     parser.add_argument("--gene_ID", default="ID", help="column containing the gene identifiers")
@@ -353,7 +357,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     model = read_model(args.model)
-    model_list = {'human1': human1_gpr, 'recon1': recon1_gpr, 'recon2': recon2_gpr, 'iMM1865': iMM1865_gpr}
+    model_gpr = {'human1': human1_gpr, 'recon1': recon1_gpr, 'recon2': recon2_gpr, 'iMM1865': iMM1865_gpr}
 
     genes = pd.read_csv(args.gene_file)
     gene_weights = pd.Series(genes[args.gene_score], index=genes[args.gene_ID])
@@ -366,7 +370,7 @@ if __name__ == "__main__":
     gene_weights = gene_weights.to_dict()
 
     if args.modelname not in model_list.keys():
-        print("Unsupported model. The supported models are: human1, recon1, recon2, iMM1865")
+        print("Unsupported model. The currently supported models are: human1, recon1, recon2, iMM1865")
     else:
-        reaction_weights = model_list[args.modelname](model=model, gene__weights=gene_weights, filename=args.output,
+        reaction_weights = model_gpr[args.modelname](model=model, gene_weights=gene_weights, filename=args.output,
                                                       save=True)
