@@ -4,7 +4,7 @@ from symengine import Add, sympify
 from numpy import abs
 import argparse
 import time
-from dexom_python.model_functions import load_reaction_weights, read_model
+from dexom_python.model_functions import read_model, check_model_options, load_reaction_weights
 from dexom_python.result_functions import write_solution
 
 
@@ -78,8 +78,7 @@ def create_partial_variables(model, reaction_weights, epsilon):
     return model
 
 
-def imat(model, reaction_weights={}, epsilon=1e-2, threshold=1e-5, timelimit=None, feasibility=1e-6, mipgaptol=1e-3,
-         full=False):
+def imat(model, reaction_weights={}, epsilon=1e-2, threshold=1e-5, full=False):
     """
     Integrative Metabolic Analysis Tool
 
@@ -138,10 +137,7 @@ def imat(model, reaction_weights={}, epsilon=1e-2, threshold=1e-5, timelimit=Non
         rl_objective = [x * x_weights[idx] for idx, x in enumerate(x_variables)]
         objective = model.solver.interface.Objective(Add(*rh_objective) + Add(*rl_objective), direction="max")
         model.objective = objective
-        model.solver.configuration.timeout = timelimit
-        model.tolerance = feasibility
-        model.solver.problem.parameters.mip.tolerances.mipgap.set(mipgaptol)
-        model.solver.configuration.presolve = True
+
         t1 = time.perf_counter()
         with model:
             solution = model.optimize()
@@ -171,12 +167,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     model = read_model(args.model)
+    check_model_options(model, timelimit=args.timelimit, feasibility=args.tol, mipgaptol=args.mipgap)
 
     reaction_weights = {}
     if args.reaction_weights:
         reaction_weights = load_reaction_weights(args.reaction_weights)
 
-    solution = imat(model, reaction_weights, epsilon=args.epsilon, threshold=args.threshold, timelimit=args.timelimit,
-                    feasibility=args.tol, mipgaptol=args.mipgap)
+    solution = imat(model, reaction_weights, epsilon=args.epsilon, threshold=args.threshold)
 
     write_solution(solution, args.threshold, args.output+"solution.csv")

@@ -1,17 +1,15 @@
 
 
 import argparse
-import pandas as pd
-from pathlib import Path
-from cobra.io import load_json_model, load_matlab_model, read_sbml_model
-from dexom_python.imat import imat, create_partial_variables, create_full_variables
-from dexom_python.result_functions import read_solution, get_binary_sol, write_solution, get_obj_value_from_binary
-from dexom_python.model_functions import load_reaction_weights, read_model
-from dexom_python.enum_functions.enumeration import EnumSolution, get_recent_solution_and_iteration
 import six
 import time
+import pandas as pd
 from symengine import Add, sympify
 from dexom_python.enum_functions.icut import create_icut_constraint
+from dexom_python.imat import imat, create_partial_variables, create_full_variables
+from dexom_python.result_functions import read_solution, get_binary_sol
+from dexom_python.model_functions import load_reaction_weights, read_model, check_model_options
+from dexom_python.enum_functions.enumeration import EnumSolution, get_recent_solution_and_iteration
 
 
 def create_maxdist_constraint(model, reaction_weights, prev_sol, obj_tol, name="maxdist_optimality", full=False):
@@ -174,6 +172,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     model = read_model(args.model)
+    check_model_options(model, timelimit=args.timelimit, feasibility=args.tol, mipgaptol=args.mipgap)
 
     reaction_weights = {}
     if args.reaction_weights:
@@ -188,8 +187,7 @@ if __name__ == "__main__":
         a = a ** i
         model = create_partial_variables(model, reaction_weights, epsilon=args.epsilon)
     else:
-        prev_sol = imat(model, reaction_weights, epsilon=args.epsilon, threshold=args.threshold,
-                        timelimit=args.timelimit, feasibility=args.tol, mipgaptol=args.mipgap)
+        prev_sol = imat(model, reaction_weights, epsilon=args.epsilon, threshold=args.threshold)
 
     icut = True
     if args.noicut:
@@ -202,11 +200,6 @@ if __name__ == "__main__":
     full = False
     if args.full:
         full = True
-
-    model.solver.configuration.timeout = args.timelimit
-    model.tolerance = args.tol
-    model.solver.problem.parameters.mip.tolerances.mipgap.set(args.mipgap)
-    model.solver.configuration.presolve = True
 
     maxdist_sol = maxdist(model=model, reaction_weights=reaction_weights, prev_sol=prev_sol, threshold=args.threshold,
                           obj_tol=args.obj_tol, maxiter=args.maxiter, out_path=args.output, icut=icut, full=args.full,

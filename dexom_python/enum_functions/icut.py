@@ -83,7 +83,7 @@ def icut(model, prev_sol=None, reaction_weights=None, eps=1e-2, thr=1e-5, tlim=N
     """
     if not prev_sol:
         prev_sol = imat(model, reaction_weights,
-                        epsilon=eps, threshold=thr, timelimit=tlim, feasibility=feas, mipgaptol=mipgap, full=full)
+                        epsilon=eps, threshold=thr, full=full)
     prev_sol_binary = get_binary_sol(prev_sol, thr)
     optimal_objective_value = prev_sol.objective_value - obj_tol
 
@@ -100,8 +100,7 @@ def icut(model, prev_sol=None, reaction_weights=None, eps=1e-2, thr=1e-5, tlim=N
         icut_constraints.append(const)
 
         try:
-            prev_sol = imat(model, reaction_weights, epsilon=eps, threshold=thr, timelimit=tlim, feasibility=feas,
-                            mipgaptol=mipgap, full=full)
+            prev_sol = imat(model, reaction_weights, epsilon=eps, threshold=thr, full=full)
         except:
             print("An error occured in iteration %i of icut, check if all feasible solutions have been found" % (i+1))
             break

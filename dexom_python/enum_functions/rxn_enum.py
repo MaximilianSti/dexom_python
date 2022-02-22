@@ -2,7 +2,7 @@
 import argparse
 import pandas as pd
 from dexom_python.imat import imat, create_partial_variables, create_full_variables
-from dexom_python.model_functions import load_reaction_weights, read_model
+from dexom_python.model_functions import load_reaction_weights, read_model, check_model_options
 from dexom_python.result_functions import read_solution, get_binary_sol, write_solution
 
 
@@ -17,8 +17,7 @@ class RxnEnumSolution(object):
         self.unique_reactions = unique_reactions
 
 
-def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, tlim=None, feas=1e-6, mipgap=1e-3,
-             obj_tol=1e-2):
+def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, obj_tol=1e-2):
     """
     Reaction enumeration method
 
@@ -70,8 +69,7 @@ def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, tlim
                     if rxn.lower_bound < 0.:
                         try:
                             rxn.upper_bound = -thr
-                            temp_sol = imat(model_temp, reaction_weights, epsilon=eps,
-                                            threshold=thr, timelimit=tlim, feasibility=feas, mipgaptol=mipgap)
+                            temp_sol = imat(model_temp, reaction_weights, epsilon=eps, threshold=thr)
                             temp_sol_bin = get_binary_sol(temp_sol, thr)
                             if temp_sol.objective_value >= optimal_objective_value:
                                 all_solutions.append(temp_sol)
@@ -89,8 +87,7 @@ def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, tlim
                     rxn.lower_bound = thr
                 # for all fluxes: compute solution with new bounds
                 try:
-                    temp_sol = imat(model_temp, reaction_weights, epsilon=eps,
-                                    threshold=thr, timelimit=tlim, feasibility=feas, mipgaptol=mipgap)
+                    temp_sol = imat(model_temp, reaction_weights, epsilon=eps, threshold=thr)
                     temp_sol_bin = get_binary_sol(temp_sol, thr)
                     if temp_sol.objective_value >= optimal_objective_value:
                         all_solutions.append(temp_sol)
@@ -126,8 +123,7 @@ def rxn_enum_single_loop(model, reaction_weights, rec_id, new_rec_state, out_nam
             print("new_rec_state has an incorrect value: %s" % str(new_rec_state))
             return 0
         try:
-            sol = imat(model_temp, reaction_weights, epsilon=eps, threshold=thr, timelimit=tlim,
-                            feasibility=feas, mipgaptol=mipgap)
+            sol = imat(model_temp, reaction_weights, epsilon=eps, threshold=thr)
         except:
             print("This constraint renders the problem unfeasible")
             return 0
@@ -160,6 +156,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     model = read_model(args.model)
+    check_model_options(model, timelimit=args.timelimit, feasibility=args.tol, mipgaptol=args.mipgap)
 
     reaction_weights = {}
     if args.reaction_weights:
@@ -185,12 +182,10 @@ if __name__ == "__main__":
         initial_solution, initial_binary = read_solution(args.prev_sol, model, reaction_weights)
         model = create_partial_variables(model, reaction_weights, args.epsilon)
     else:
-        initial_solution = imat(model, reaction_weights, epsilon=args.epsilon, threshold=args.threshold,
-                                timelimit=args.timelimit, feasibility=args.tol, mipgaptol=args.mipgap)
+        initial_solution = imat(model, reaction_weights, epsilon=args.epsilon, threshold=args.threshold)
 
     solution = rxn_enum(model=model, rxn_list=rxn_list, prev_sol=initial_solution, reaction_weights=reaction_weights,
-                        eps=args.epsilon, thr=args.threshold, tlim=args.timelimit, feas=args.tol, mipgap=args.mipgap,
-                        obj_tol=args.obj_tol)
+                        eps=args.epsilon, thr=args.threshold, obj_tol=args.obj_tol)
 
     uniques = pd.DataFrame(solution.unique_binary)
     uniques.to_csv(args.output+"_solutions.csv")
