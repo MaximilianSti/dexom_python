@@ -6,7 +6,6 @@ from cobra import Solution
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 import argparse
-from dexom_python.model_functions import load_reaction_weights, read_model
 
 
 def get_binary_sol(solution, threshold):
@@ -151,20 +150,6 @@ def plot_pca(solution_path, rxn_enum_solutions=None, save_name=""):
     fig.savefig(save_name+"pca.png")
 
     return pca
-
-
-def satisfied_reactions(modelfile, weightfile, solutionfile):
-    model = read_model(modelfile)
-    rw = load_reaction_weights(weightfile)
-    solution, binary = read_solution(solutionfile, model, rw)
-    posweights = set([key for key in rw.keys() if rw[key] > 0])
-    negweights = set([key for key in rw.keys() if rw[key] < 0])
-    for idx, rxn in enumerate(solution.fluxes.index):
-        if solution.fluxes[rxn] > 0:
-            reaction = model.reactions.get_by_id(rxn)
-            # count reaction.genes in reaction_weights.nonzero
-
-    return 0
 
 
 if __name__ == "__main__":
