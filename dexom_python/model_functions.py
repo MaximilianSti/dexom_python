@@ -65,19 +65,17 @@ def clean_model(model, reaction_weights=None, full=False):
                 model.solver.remove(model.solver.constraints["rl_"+rid+"_lower"])
 
 
-def check_model_options(model, timelimit=None, feasibility=None, mipgaptol=None):
+def check_model_options(model, timelimit=None, feasibility=None, mipgaptol=None, verbosity=None):
 
-    if timelimit:
-        model.solver.configuration.timeout = timelimit
-    if feasibility:
-        model.tolerance = feasibility
-    if mipgaptol:
-        model.solver.problem.parameters.mip.tolerances.mipgap.set(mipgaptol)
+    model.solver.configuration.timeout = timelimit
+    model.tolerance = feasibility if feasibility else 1e-6
+    model.solver.problem.parameters.mip.tolerances.mipgap.set(mipgaptol) if mipgaptol else None
+    model.solver.configuration.verbosity = verbosity if verbosity else 1
     model.solver.configuration.presolve = True
     return model
 
 
-def get_all_reactions_from_model(model, save=True, shuffle=False, out_path=""):
+def get_all_reactions_from_model(model, save=True, shuffle=True, out_path=""):
     """
 
     Parameters
@@ -171,4 +169,3 @@ def load_reaction_weights(filename, rxn_names="reactions", weight_names="weights
     df.index = df[rxn_names]
     reaction_weights = df[weight_names].to_dict()
     return {k: float(v) for k, v in reaction_weights.items() if float(v) == float(v)}
-
