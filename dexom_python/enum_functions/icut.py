@@ -4,16 +4,18 @@ import time
 import numpy as np
 from symengine import sympify
 from dexom_python.imat import imat
-from dexom_python.result_functions import get_binary_sol
+from dexom_python.result_functions import get_binary_sol, detect_problems
 from dexom_python.enum_functions.enumeration import EnumSolution
 
 
-def create_icut_constraint(model, reaction_weights, threshold, prev_sol, prev_sol_binary, name, full=False):
+def create_icut_constraint(model, reaction_weights, threshold, prev_sol, name, full=False):
     """
     Creates an icut constraint on the previously found solution.
     This solution is excluded from the solution space.
     """
+    tol = model.solver.configuration.tolerances.feasibility
     if full:
+        prev_sol_binary = get_binary_sol(prev_sol, threshold, tol)
         expr = sympify("1")
         newbound = sum(prev_sol_binary)
         cvector = [1 if x else -1 for x in prev_sol_binary]
@@ -27,20 +29,22 @@ def create_icut_constraint(model, reaction_weights, threshold, prev_sol, prev_so
                 y = model.solver.variables["rh_" + rid + "_pos"]
                 x = model.solver.variables["rh_" + rid + "_neg"]
                 if prev_sol.fluxes[rid] >= threshold:
-                    var_vals.append(y-x)
+                    var_vals.append(y - x)
                     newbound += 1
                 elif prev_sol.fluxes[rid] <= -threshold:
                     var_vals.append(x - y)
                     newbound += 1
-                else:
-                    var_vals.append(- y - x)
+                elif np.abs(prev_sol.fluxes[rid]) < threshold: # else
+                    var_vals.append(-y - x)
             elif weight < 0:
-                x = model.solver.variables["rl_" + rid]
-                if np.abs(prev_sol.fluxes[rid]) < threshold:
+                if rid == 'MAR06366':
+                    print("now")
+                x = sympify("1") - model.solver.variables["rl_" + rid]  # uses new variable implementation
+                if np.abs(prev_sol.fluxes[rid]) < (threshold-tol):
                     var_vals.append(x)
                     newbound += 1
-                else:
-                    var_vals.append(- x)
+                elif np.abs(prev_sol.fluxes[rid]) >= (threshold-tol): # else
+                    var_vals.append(-x)
         expr = sum(var_vals)
     constraint = model.solver.interface.Constraint(expr, ub=newbound, name=name)
     if expr.evalf() == 1:
@@ -49,8 +53,7 @@ def create_icut_constraint(model, reaction_weights, threshold, prev_sol, prev_so
     return constraint
 
 
-def icut(model, prev_sol=None, reaction_weights=None, eps=1e-2, thr=1e-5, tlim=None, feas=1e-6, mipgap=1e-3,
-         obj_tol=1e-5, maxiter=10, full=False):
+def icut(model, prev_sol=None, reaction_weights=None, eps=1e-2, thr=1e-5, obj_tol=1e-3, maxiter=10, full=False):
     """
     integer-cut method
 
@@ -81,11 +84,12 @@ def icut(model, prev_sol=None, reaction_weights=None, eps=1e-2, thr=1e-5, tlim=N
     solution: EnumSolution object
         In the case of integer-cut, all_solutions and unique_solutions are identical
     """
+    tol = model.solver.configuration.tolerances.feasibility
     if not prev_sol:
         prev_sol = imat(model, reaction_weights,
                         epsilon=eps, threshold=thr, full=full)
-    prev_sol_binary = get_binary_sol(prev_sol, thr)
-    optimal_objective_value = prev_sol.objective_value - obj_tol
+    prev_sol_binary = get_binary_sol(prev_sol, thr, tol)
+    optimal_objective_value = prev_sol.objective_value - obj_tol*prev_sol.objective_value
 
     all_solutions = [prev_sol]
     all_solutions_binary = [prev_sol_binary]
@@ -94,8 +98,7 @@ def icut(model, prev_sol=None, reaction_weights=None, eps=1e-2, thr=1e-5, tlim=N
     for i in range(maxiter):
         t0 = time.perf_counter()
 
-        const = create_icut_constraint(model, reaction_weights, thr, prev_sol, prev_sol_binary,
-                                       name="icut_"+str(i), full=full)
+        const = create_icut_constraint(model, reaction_weights, thr, prev_sol, name="icut_"+str(i), full=full)
         model.solver.add(const)
         icut_constraints.append(const)
 
@@ -109,8 +112,8 @@ def icut(model, prev_sol=None, reaction_weights=None, eps=1e-2, thr=1e-5, tlim=N
 
         if prev_sol.objective_value >= optimal_objective_value:
             all_solutions.append(prev_sol)
-            prev_sol_binary = get_binary_sol(prev_sol, thr)
-            all_solutions_binary.append(prev_sol)
+            prev_sol_binary = get_binary_sol(prev_sol, thr, tol)
+            all_solutions_binary.append(prev_sol_binary)
         else:
             break
 

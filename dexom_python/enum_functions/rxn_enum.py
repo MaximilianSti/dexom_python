@@ -42,7 +42,8 @@ def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, obj_
     -------
     solution: RxnEnumSolution object
     """
-    prev_sol_bin = get_binary_sol(prev_sol, thr)
+    tol = model.solver.configuration.tolerances.feasibility
+    prev_sol_bin = get_binary_sol(prev_sol, thr, tol)
     optimal_objective_value = prev_sol.objective_value - prev_sol.objective_value * obj_tol
 
     all_solutions = [prev_sol]
@@ -70,7 +71,7 @@ def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, obj_
                         try:
                             rxn.upper_bound = -thr
                             temp_sol = imat(model_temp, reaction_weights, epsilon=eps, threshold=thr)
-                            temp_sol_bin = get_binary_sol(temp_sol, thr)
+                            temp_sol_bin = get_binary_sol(temp_sol, thr, tol)
                             if temp_sol.objective_value >= optimal_objective_value:
                                 all_solutions.append(temp_sol)
                                 all_solutions_binary.append(temp_sol_bin)
@@ -88,7 +89,7 @@ def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, obj_
                 # for all fluxes: compute solution with new bounds
                 try:
                     temp_sol = imat(model_temp, reaction_weights, epsilon=eps, threshold=thr)
-                    temp_sol_bin = get_binary_sol(temp_sol, thr)
+                    temp_sol_bin = get_binary_sol(temp_sol, thr, tol)
                     if temp_sol.objective_value >= optimal_objective_value:
                         all_solutions.append(temp_sol)
                         all_solutions_binary.append(temp_sol_bin)
@@ -143,7 +144,7 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--reaction_weights", default=None,
                         help="Reaction weights in csv format (first row: reaction names, second row: weights)")
     parser.add_argument("-p", "--prev_sol", default=None, help="initial imat solution in .txt format")
-    parser.add_argument("--epsilon", type=float, default=1e-2,
+    parser.add_argument("-e", "--epsilon", type=float, default=1e-2,
                         help="Activation threshold for highly expressed reactions")
     parser.add_argument("--threshold", type=float, default=1e-5, help="Activation threshold for all reactions")
     parser.add_argument("-t", "--timelimit", type=int, default=None, help="Solver time limit")
