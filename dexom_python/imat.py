@@ -5,11 +5,10 @@ from numpy import abs
 import argparse
 import time
 from dexom_python.model_functions import read_model, check_model_options, load_reaction_weights
-from dexom_python.result_functions import write_solution
+from dexom_python.result_functions import write_solution, detect_problems
 
 
 def create_full_variables(model, reaction_weights, epsilon, threshold):
-
     # the x_rid variables represent a binary condition of flux activation
     for rxn in model.reactions:
         if "x_" + rxn.id not in model.solver.variables:
@@ -42,8 +41,7 @@ def create_full_variables(model, reaction_weights, epsilon, threshold):
     return model
 
 
-def create_partial_variables(model, reaction_weights, epsilon):
-
+def create_partial_variables(model, reaction_weights, epsilon): # for the driven-based imat implementation
     for rid, weight in six.iteritems(reaction_weights):
         if weight > 0:  # the rh_rid variables represent the highly expressed reactions
             if "rh_" + rid + "_pos" not in model.solver.variables:
@@ -75,6 +73,57 @@ def create_partial_variables(model, reaction_weights, epsilon):
                 model.solver.add(pos_constraint)
                 model.solver.add(neg_constraint)
 
+    return model
+
+
+def create_new_partial_variables(model, reaction_weights, epsilon, threshold): # these variables allow for better performance in enumeration
+    for rid, weight in six.iteritems(reaction_weights):
+        if weight > 0:
+            if "rh_" + rid + "_pos" not in model.solver.variables:
+                rxn = model.reactions.get_by_id(rid)
+                xtot = model.solver.interface.Variable("x_%s" % rid, type="binary")
+                xf = model.solver.interface.Variable("rh_%s_pos" % rid, type="binary")
+                xr = model.solver.interface.Variable("rh_%s_neg" % rid, type="binary")
+                model.solver.add(xtot)
+                model.solver.add(xf)
+                model.solver.add(xr)
+                xtot_def = model.solver.interface.Constraint(xtot - xf - xr, lb=0., ub=0., name="x_%s_def" % rid)
+                xf_upper = model.solver.interface.Constraint(
+                    rxn.forward_variable - rxn.upper_bound * xf, ub=0., name="xr_%s_upper" % rid)
+                xr_upper = model.solver.interface.Constraint(
+                    rxn.reverse_variable + rxn.lower_bound * xr, ub=0., name="xf_%s_upper" % rid)
+                xf_lower = model.solver.interface.Constraint(
+                    rxn.forward_variable - epsilon * xf, lb=0., name="xf_%s_lower" % rid)
+                xr_lower = model.solver.interface.Constraint(
+                    rxn.reverse_variable - epsilon * xr, lb=0., name="xr_%s_lower" % rid)
+                model.solver.add(xtot_def)
+                model.solver.add(xf_upper)
+                model.solver.add(xr_upper)
+                model.solver.add(xf_lower)
+                model.solver.add(xr_lower)
+        elif weight < 0:  # the rl_rid variables represent the lowly expressed reactions
+            if "rl_" + rid not in model.solver.variables:
+                rxn = model.reactions.get_by_id(rid)
+                xtot = model.solver.interface.Variable("rl_%s" % rid, type="binary")
+                xf = model.solver.interface.Variable("xf_%s" % rid, type="binary")
+                xr = model.solver.interface.Variable("xr_%s" % rid, type="binary")
+                model.solver.add(xtot)
+                model.solver.add(xf)
+                model.solver.add(xr)
+                xtot_def = model.solver.interface.Constraint(xtot - xf - xr, lb=0., ub=0., name="x_%s_def" % rid)
+                xf_upper = model.solver.interface.Constraint(
+                    rxn.forward_variable - rxn.upper_bound * xf, ub=0., name="xr_%s_upper" % rid)
+                xr_upper = model.solver.interface.Constraint(
+                    rxn.reverse_variable + rxn.lower_bound * xr, ub=0., name="xf_%s_upper" % rid)
+                xf_lower = model.solver.interface.Constraint(
+                    rxn.forward_variable - threshold * xf, lb=0., name="xf_%s_lower" % rid)
+                xr_lower = model.solver.interface.Constraint(
+                    rxn.reverse_variable - threshold * xr, lb=0., name="xr_%s_lower" % rid)
+                model.solver.add(xtot_def)
+                model.solver.add(xf_upper)
+                model.solver.add(xr_upper)
+                model.solver.add(xf_lower)
+                model.solver.add(xr_lower)
     return model
 
 
@@ -119,9 +168,8 @@ def imat(model, reaction_weights={}, epsilon=1e-2, threshold=1e-5, full=False):
                     x = sympify("1") - model.solver.variables["x_" + rid]
                     x_variables.append(x)
                     x_weights.append(abs(weight))
-
-        else:  # for the driven-based imat implementation
-            model = create_partial_variables(model, reaction_weights, epsilon)
+        else:
+            model = create_new_partial_variables(model, reaction_weights, epsilon, threshold)  # uses new variable implementation
             for rid, weight in six.iteritems(reaction_weights):
                 if weight > 0:
                     y_neg = model.solver.variables["rh_" + rid + "_neg"]
@@ -129,7 +177,7 @@ def imat(model, reaction_weights={}, epsilon=1e-2, threshold=1e-5, full=False):
                     y_variables.append([y_neg, y_pos])
                     y_weights.append(weight)
                 elif weight < 0:
-                    x = model.solver.variables["rl_" + rid]
+                    x = sympify("1") - model.solver.variables["rl_" + rid]  # uses new variable implementation
                     x_variables.append(x)
                     x_weights.append(abs(weight))
 
@@ -142,8 +190,12 @@ def imat(model, reaction_weights={}, epsilon=1e-2, threshold=1e-5, full=False):
         with model:
             solution = model.optimize()
             t2 = time.perf_counter()
-            print("iMAT:", t1-t0, "s spent before optimize call")
-            print("iMAT:", t2-t1, "s spent on optimize call")
+            print("%.2fs before optimize call" % (t1-t0))
+            print("%.2fs during optimize call" % (t2-t1))
+            print("problems")
+            probs = detect_problems(model, epsilon, threshold, model.solver.configuration.tolerances.feasibility)
+            print(probs)
+
             return solution
     finally:
         pass
@@ -156,12 +208,12 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--model", help="Metabolic model in sbml, json, or matlab format")
     parser.add_argument("-r", "--reaction_weights", default={},
                         help="Reaction weights in csv format with column names: (reactions, weights)")
-    parser.add_argument("-e", "--epsilon", type=float, default=1e-2,
+    parser.add_argument("-e", "--epsilon", type=float, default=1e-4,
                         help="Activation threshold for highly expressed reactions")
-    parser.add_argument("--threshold", type=float, default=1e-5, help="Activation threshold for all reactions")
+    parser.add_argument("--threshold", type=float, default=1e-8, help="Activation threshold for all reactions")
     parser.add_argument("-t", "--timelimit", type=int, default=None, help="Solver time limit")
-    parser.add_argument("--tol", type=float, default=1e-6, help="Solver feasibility tolerance")
-    parser.add_argument("--mipgap", type=float, default=1e-3, help="Solver MIP gap tolerance")
+    parser.add_argument("--tol", type=float, default=1e-8, help="Solver feasibility tolerance")
+    parser.add_argument("--mipgap", type=float, default=1e-6, help="Solver MIP gap tolerance")
     parser.add_argument("-o", "--output", default="imat_solution", help="Path of the output file, without format")
 
     args = parser.parse_args()
