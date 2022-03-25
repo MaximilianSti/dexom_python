@@ -20,27 +20,30 @@ def replace_MulMax_AddMin(expression):
             return expression.func(*replaced_args)
 
 
-def expression2qualitative(expression_file, column_idx, percentage=25, method="keep", save=True, outpath="geneweights"):
+def expression2qualitative(expression_file, column_idx=-1, percentage=25, method="keep", save=True, outpath="geneweights"):
     """
 
     Parameters
     ----------
     expression_file: path to file containing gene IDs in the first column and gene expression values in a later column
-    column_idx: column indexes containing gene expression values to be transformed. If None, all columns will be transformed
+    column_idx: column indexes containing gene expression values to be transformed. If -1, all columns will be transformed
     percentage: percentage of genes to be used for determining high/low gene expression
     method: one of "max", "mean" or "keep". chooses how to deal with genes containing multiple conflicting expression values
-    save
-    outpath
+    save: if True, saves the resulting gene weights
+    outpath: if save=True, the .csv file will be saved to this path
 
     Returns
     -------
 
     """
 
-    if type(column_idx) == int:
+    df = pd.read_csv(expression_file, index_col=0)
+
+    if column_idx == -1:
+        column_idx = list(range(len(df.columns)))
+    elif type(column_idx) == int:
         column_idx = list(range(column_idx))
 
-    df = pd.read_csv(expression_file, index_col=0)
     cutoff = 1/(percentage/100)
     colnames = df.columns[column_idx]
     for col in colnames:
@@ -81,8 +84,8 @@ def prepare_expr_split_gen_list(rxn, modelname):
         gen_list = set([g.id for g in rxn.genes])
     elif modelname == "zebrafish1":
         expr_split = rxn.gene_reaction_rule.replace("(", "( ").replace(")", " )").split()
-        expr_split = [re.sub(':|\.', '_', s) for s in expr_split]
-        gen_list = set([re.sub(':|\.', '_', g.id) for g in rxn.genes])
+        expr_split = [re.sub(':|\.|-', '_', s) for s in expr_split]
+        gen_list = set([re.sub(':|\.|-', '_', g.id) for g in rxn.genes])
     else:
         print("Modelname not found")
         expr_split = None
@@ -116,7 +119,7 @@ def apply_gpr(model, gene_weights, modelname, save=True, filename="reaction_weig
                 if v < 0:
                     new_weights[g] = -v - 1e-15
                     negweights.append(-v)
-            expression = ' '.join(expr_split).replace('or', '*').replace('and', '+')
+            expression = ' '.join(expr_split).replace(' or ', ' * ').replace(' and ', ' + ')
             # weight = sympify(expression).xreplace({Mul: Max}).xreplace({Add: Min})
             weight = replace_MulMax_AddMin(sympify(expression)).subs(new_weights)
             if weight + 1e-15 in negweights:
@@ -141,13 +144,19 @@ if __name__ == "__main__":
                         help="Path to which the reaction_weights .csv file is saved")
     parser.add_argument("--gene_ID", default="ID", help="column containing the gene identifiers")
     parser.add_argument("--gene_score", default="t", help="column containing the gene scores")
+    parser.add_argument("--convert", action='store_true', help="converts gene expression to qualitative weights")
+    parser.add_argument("-t", "--threshold", type=float, default=.25,
+                        help="proportion of genes that are highly/lowly expressed (only used if --convert is selected)")
     args = parser.parse_args()
 
     model = read_model(args.model)
     model_list = ["human1", "recon1", "recon2", "iMM1865", "zebrafish1"]
 
     genes = pd.read_csv(args.gene_file)
-    gene_weights = pd.Series(genes[args.gene_score], index=genes[args.gene_ID])
+    if args.convert:
+        genes = expression2qualitative(args.gene_file, percentage=args.threshold*100,
+                                       outpath=args.output+"_qual_geneweights")
+    gene_weights = pd.Series(genes[args.gene_score].values, index=genes[args.gene_ID])
 
     # current behavior: all genes with several different weights are removed
     for x in set(gene_weights.index):
