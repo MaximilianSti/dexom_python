@@ -8,27 +8,19 @@ from sklearn.decomposition import PCA
 import argparse
 
 
-def get_binary_sol(solution, threshold):
-    binary = [1 if np.abs(flux) >= threshold else 0 for flux in solution.fluxes]
+def get_binary_sol(solution, threshold, tolerance):
+    binary = [1 if np.abs(flux) >= (threshold-tolerance) else 0 for flux in solution.fluxes]
     return binary
 
 
-def get_obj_value_from_binary(binary, reaction_weights, full_weights=True, model=None):
+def legacy_get_obj_value_from_binary(binary, reaction_weights, full_weights=True, model=None):
     """
     Calculates the objective value of a solution,
     as well as the fraction of active RH and inactive RL reactions
 
-    Parameters
-    ----------
-    binary
-    reaction_weights
-    full_weights: bool
-        True if reaction_weights contain every reaction from the model
-    model: required if full_weights is False
-
-    Returns
-    -------
-    The objective value
+    !! The result is not always accurate !!
+    Specific case: if a RH reaction has flux below epsilon but above threshold, it will be regarded as activated,
+    but without counting for the objective value
     """
     if full_weights:
         wei = list(reaction_weights.values())
@@ -79,7 +71,8 @@ def read_solution(filename, model=None, reaction_weights=None):
         fluxes = pd.read_csv(filename, index_col=0).rename(index={0: "fluxes"}).T
         fluxes.index = [rxn.id for rxn in model.reactions]
         sol_bin = list(fluxes["fluxes"])
-        objective_value = get_obj_value_from_binary(sol_bin, model, reaction_weights)
+        # objective_value = get_obj_value_from_binary(sol_bin, model, reaction_weights)
+        objective_value = 0.
         status = "binary"
     else:
         df = pd.read_csv(filename, index_col=0, skipfooter=2, engine="python")
@@ -99,6 +92,48 @@ def combine_solutions(sol_path):
     print("There are %i unique solutions and %i duplicates." % (len(uniquesol), len(fullsol) - len(uniquesol)))
     uniquesol.to_csv(sol_path+"/combined_solutions.csv")
     return uniquesol
+
+
+def detect_problems(model, eps, thr, tol):
+    primals_indicators = {}
+    for key, val in model.solver.primal_values.items():
+        if "rh_" in key or "rl_" in key[:3]:
+            primals_indicators[key] = val
+
+    primals_fluxes = {}
+    for key, val in model.solver.primal_values.items():
+        if key not in primals_indicators.keys():
+            if "reverse" not in key:
+                primals_fluxes[key] = val
+            else:
+                newkey = "_".join(key.split("_")[:2])
+                primals_fluxes[newkey] = val
+
+    problems = {}
+    for key, val in primals_indicators.items():
+        k = key.split("_")
+        if k[0] == "rl":
+            flux = primals_fluxes[k[1]] + primals_fluxes[k[1] + "_reverse"]
+            if val > 0.5 and flux < thr: # CHANGED FOR TESTING
+                problems[key] = (flux, val)
+            elif val < 0.5 and flux > thr: # CHANGED FOR TESTING
+                problems[key] = (flux, val)
+        elif k[-1] == "pos":
+            flux = primals_fluxes[k[1]]
+            if val > 0.5 and flux < eps-1000*tol:
+                problems[key] = (flux, val)
+            elif val < 0.5 and flux >= eps-1000*tol:
+                problems[key] = (flux, val)
+        elif k[-1] == "neg":
+            flux = primals_fluxes[k[1] + "_reverse"]
+            if val > 0.5 and flux < eps-1000*tol:
+                problems[key] = (flux, val)
+            elif val < 0.5 and flux >= eps-1000*tol:
+                problems[key] = (flux, val)
+        else:
+            print("problem with", key)
+
+    return problems
 
 
 def plot_pca(solution_path, rxn_enum_solutions=None, save_name=""):
