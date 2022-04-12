@@ -4,10 +4,11 @@ import argparse
 import six
 import time
 import pandas as pd
+import numpy as np
 from symengine import Add, sympify
 from dexom_python.enum_functions.icut import create_icut_constraint
 from dexom_python.imat import imat, create_partial_variables, create_full_variables
-from dexom_python.result_functions import read_solution, get_binary_sol
+from dexom_python.result_functions import read_solution
 from dexom_python.model_functions import load_reaction_weights, read_model, check_model_options
 from dexom_python.enum_functions.enumeration import EnumSolution, get_recent_solution_and_iteration
 
@@ -113,7 +114,7 @@ def maxdist(model, reaction_weights, prev_sol, threshold=1e-4, obj_tol=1e-2, max
     tol = model.solver.configuration.tolerances.feasibility
     icut_constraints = []
     all_solutions = [prev_sol]
-    prev_sol_bin = get_binary_sol(prev_sol, threshold, tol)
+    prev_sol_bin = (np.abs(prev_sol.fluxes) >= threshold-tol).values.astype(int)
     all_binary = [prev_sol_bin]
 
     # adding the optimality constraint: the new objective value must be equal to the previous objective value
@@ -133,7 +134,7 @@ def maxdist(model, reaction_weights, prev_sol, threshold=1e-4, obj_tol=1e-2, max
         try:
             with model:
                 prev_sol = model.optimize()
-            prev_sol_bin = get_binary_sol(prev_sol, threshold, tol)
+            prev_sol_bin = (np.abs(prev_sol.fluxes) >= threshold-tol).values.astype(int)
             all_solutions.append(prev_sol)
             all_binary.append(prev_sol_bin)
         except:

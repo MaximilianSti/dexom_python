@@ -5,7 +5,7 @@ from numpy import abs
 import argparse
 import time
 from dexom_python.model_functions import read_model, check_model_options, load_reaction_weights
-from dexom_python.result_functions import write_solution, detect_problems
+from dexom_python.result_functions import write_solution
 
 
 def create_full_variables(model, reaction_weights, epsilon, threshold):
@@ -192,9 +192,6 @@ def imat(model, reaction_weights={}, epsilon=1e-2, threshold=1e-5, full=False):
             t2 = time.perf_counter()
             print("%.2fs before optimize call" % (t1-t0))
             print("%.2fs during optimize call" % (t2-t1))
-            print("problems")
-            probs = detect_problems(model, epsilon, threshold, model.solver.configuration.tolerances.feasibility)
-            print(probs)
 
             return solution
     finally:
@@ -227,4 +224,4 @@ if __name__ == "__main__":
 
     solution = imat(model, reaction_weights, epsilon=args.epsilon, threshold=args.threshold)
 
-    write_solution(solution, args.threshold, args.output+"solution.csv")
+    write_solution(model, solution, args.threshold, args.output+".csv")

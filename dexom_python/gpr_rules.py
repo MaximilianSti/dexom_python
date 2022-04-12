@@ -138,7 +138,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("-m", "--model", help="GEM in json, sbml or matlab format")
-    parser.add_argument("-n", "--modelname", help="supported: human1, recon1, recon2, iMM1865")
+    parser.add_argument("-n", "--modelname", help="supported: human1, recon1, recon2, iMM1865, zebrafish1")
     parser.add_argument("-g", "--gene_file", help="csv file containing gene identifiers and scores")
     parser.add_argument("-o", "--output", default="reaction_weights",
                         help="Path to which the reaction_weights .csv file is saved")

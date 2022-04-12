@@ -1,9 +1,10 @@
 
 import argparse
 import pandas as pd
-from dexom_python.imat import imat, create_partial_variables, create_full_variables
+import numpy as np
+from dexom_python.imat import imat, create_new_partial_variables, create_full_variables
 from dexom_python.model_functions import load_reaction_weights, read_model, check_model_options
-from dexom_python.result_functions import read_solution, get_binary_sol, write_solution
+from dexom_python.result_functions import read_solution, write_solution
 
 
 class RxnEnumSolution(object):
@@ -43,7 +44,7 @@ def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, obj_
     solution: RxnEnumSolution object
     """
     tol = model.solver.configuration.tolerances.feasibility
-    prev_sol_bin = get_binary_sol(prev_sol, thr, tol)
+    prev_sol_bin = (np.abs(prev_sol.fluxes) >= thr-tol).values.astype(int)
     optimal_objective_value = prev_sol.objective_value - prev_sol.objective_value * obj_tol
 
     all_solutions = [prev_sol]
@@ -71,7 +72,7 @@ def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, obj_
                         try:
                             rxn.upper_bound = -thr
                             temp_sol = imat(model_temp, reaction_weights, epsilon=eps, threshold=thr)
-                            temp_sol_bin = get_binary_sol(temp_sol, thr, tol)
+                            temp_sol_bin = (np.abs(temp_sol.fluxes) >= thr-tol).values.astype(int)
                             if temp_sol.objective_value >= optimal_objective_value:
                                 all_solutions.append(temp_sol)
                                 all_solutions_binary.append(temp_sol_bin)
@@ -80,16 +81,19 @@ def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, obj_
                                     unique_solutions_binary.append(temp_sol_bin)
                                     unique_reactions.append(rid+"_backwards")
                         except:
-                            print("An error occurred with reaction %s_backwards. "
+                            print("An error occurred with reaction %s_reverse. "
                                   "Check feasibility of the model when this reaction is irreversible." % rid)
                         finally:
                             rxn.upper_bound = upper_bound_temp
                     # for all inactive fluxes, check activation in forwards direction
-                    rxn.lower_bound = thr
+                    if rxn.upper_bound >= thr:
+                        rxn.lower_bound = thr
+                    else:
+                        rxn.lower_bound = rxn.upper_bound
                 # for all fluxes: compute solution with new bounds
                 try:
                     temp_sol = imat(model_temp, reaction_weights, epsilon=eps, threshold=thr)
-                    temp_sol_bin = get_binary_sol(temp_sol, thr, tol)
+                    temp_sol_bin = (np.abs(temp_sol.fluxes) >= thr-tol).values.astype(int)
                     if temp_sol.objective_value >= optimal_objective_value:
                         all_solutions.append(temp_sol)
                         all_solutions_binary.append(temp_sol_bin)
@@ -99,16 +103,19 @@ def rxn_enum(model, reaction_weights, rxn_list, prev_sol, eps=1., thr=1e-1, obj_
                             unique_solutions_binary.append(temp_sol_bin)
                             unique_reactions.append(rid)
                 except:
-                    print("An error occurred with reaction %s. "
-                          "Check feasibility of the model when this reaction is blocked/irreversible" % rid)
+                    if prev_sol_bin[idx] == 1:
+                        print("An error occurred with reaction %s. "
+                              "Check feasibility of the model when this reaction is blocked" % rid)
+                    else:
+                        print("An error occurred with reaction %s. "
+                              "Check feasibility of the model when this reaction is irreversible" % rid)
 
     solution = RxnEnumSolution(all_solutions, unique_solutions, all_solutions_binary, unique_solutions_binary,
                                all_reactions, unique_reactions)
     return solution
 
 
-def rxn_enum_single_loop(model, reaction_weights, rec_id, new_rec_state, out_name, eps=1e-2, thr=1e-5, tlim=None,
-                         feas=1e-6, mipgap=1e-3):
+def rxn_enum_single_loop(model, reaction_weights, rec_id, new_rec_state, out_name, eps=1e-2, thr=1e-5):
     with model as model_temp:
         if rec_id not in model.reactions:
             print("reaction not found in model")
@@ -128,7 +135,7 @@ def rxn_enum_single_loop(model, reaction_weights, rec_id, new_rec_state, out_nam
         except:
             print("This constraint renders the problem unfeasible")
             return 0
-    write_solution(sol, thr, out_name)
+    write_solution(model, sol, thr, out_name)
     return 1
 
 
@@ -181,7 +188,7 @@ if __name__ == "__main__":
 
     if args.prev_sol:
         initial_solution, initial_binary = read_solution(args.prev_sol, model, reaction_weights)
-        model = create_partial_variables(model, reaction_weights, args.epsilon)
+        model = create_new_partial_variables(model, reaction_weights, args.epsilon, args.threshold)
     else:
         initial_solution = imat(model, reaction_weights, epsilon=args.epsilon, threshold=args.threshold)
 
@@ -193,4 +200,4 @@ if __name__ == "__main__":
 
     if args.save:
         for i in range(len(solution.unique_solutions)):
-            write_solution(solution.unique_solutions[i], args.threshold, args.output+"_solution_"+str(i)+".csv")
+            write_solution(model, solution.unique_solutions[i], args.threshold, args.output+"_solution_"+str(i)+".csv")
