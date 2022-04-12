@@ -27,28 +27,51 @@ def get_recent_solution_and_iteration(dirpath, startsol_num):
     return solution, iteration
 
 
-def write_rxn_enum_script(directory, modelfile, weightfile, reactionlist, imatsol, iters=100):
+def write_rxn_enum_script(directory, modelfile, weightfile, reactionlist, imatsol, username, eps=1e-4, thr=1e-5,
+                          tol=1e-8, iters=100, maxiters=1e10):
     with open(reactionlist, "r") as file:
         rxns = file.read().split("\n")
-    rxn_num = (len(rxns) // iters) + 1
+    n_max = len(rxns) if len(rxns) < maxiters else maxiters
+    rxn_num = (n_max // iters) + 1
     for i in range(rxn_num):
-        with open(directory+"/file_" + str(i) + ".sh", "w+") as f:
+        with open(directory+"/rxn_file_" + str(i) + ".sh", "w+") as f:
             f.write('#!/bin/bash\n#SBATCH -p workq\n#SBATCH --mail-type=ALL\n#SBATCH --mem=64G\n#SBATCH -c 24\n'
                     '#SBATCH -t 05:00:00\n#SBATCH -J rxn_%i\n#SBATCH -o rxnout_%i.out\n#SBATCH -e rxnerr_%i.out\n'
                     % (i, i, i))
-            f.write('cd /home/mstingl/work/dexom_py\nmodule purge\nmodule load system/Python-3.7.4\nsource env/bin/'
-                    'activate\nexport PYTHONPATH=${PYTHONPATH}:"/home/mstingl/work/CPLEX_Studio1210/cplex/python/3.7'
-                    '/x86-64_linux"\n')
-            f.write('python dexom_python/enum_functions/rxn_enum.py -o %s/rxn_enum_%i --range %i_%i -m %s -r %s -l %s -p %s '
-                    '-t 6000 --save\n' % (directory, i, i*iters, i*iters+iters, modelfile, weightfile, reactionlist,
-                                          imatsol))
-    with open(directory+"/runfiles.sh", "w+") as f:
+            f.write('cd /home/%s/work/dexom_py\nmodule purge\nmodule load system/Python-3.7.4\nsource env/bin/'
+                    'activate\nexport PYTHONPATH=${PYTHONPATH}:"/home/%s/work/CPLEX_Studio1210/cplex/python/3.7'
+                    '/x86-64_linux"\n' % (username, username))
+            f.write('python dexom_python/enum_functions/rxn_enum.py -o %s/rxn_enum_%i --range %i_%i -m %s -r %s -l %s '
+                    '-p %s -t 6000 --save -e %s --threshold %s --tol %s\n' % (directory, i, i*iters, i*iters+iters,
+                    modelfile, weightfile, reactionlist, imatsol, eps, thr, tol))
+    with open(directory+"/rxn_runfiles.sh", "w+") as f:
         f.write('#!/bin/bash\n#SBATCH --mail-type=ALL\n#SBATCH -J runfiles\n#SBATCH -o runout.out\n#SBATCH '
                 '-e runerr.out\ncd $SLURM_SUBMIT_DIR\nfor i in {0..%i}\ndo\n    dos2unix file_"$i".sh\n    sbatch'
                 ' file_"$i".sh\ndone' % (rxn_num-1))
 
 
-def write_batch_script_dexom(directory, username, modelfile, weightfile, reactionlist, imatsol, objtol, filenums=100, iters=100):
+def write_batch_script_divenum(directory, username, modelfile, weightfile, rxnsols, objtol, eps=1e-4, thr=1e-5,
+                               tol=1e-8, filenums=100, iters=100, t=6000):
+    for i in range(filenums):
+        with open(directory+"file_"+str(i)+".sh", "w+") as f:
+            f.write('#!/bin/bash\n#SBATCH -p workq\n#SBATCH --mail-type=ALL\n#SBATCH --mem=64G\n#SBATCH -c 24\n'
+                    '#SBATCH -t 05:00:00\n#SBATCH -J dexom1_%i\n#SBATCH -o dex1out%i.out\n#SBATCH -e dex1err%i.out\n'
+                    % (i, i, i))
+            f.write('cd /home/%s/work/dexom-python\nmodule purge\nmodule load system/Python-3.7.4\nsource env/bin/'
+                    'activate\nexport PYTHONPATH=${PYTHONPATH}:"/home/%s/save/CPLEX_Studio1210/cplex/python/3.7'
+                    '/x86-64_linux"\n' % (username, username))
+            a = (1-1/(filenums*2*(iters/10)))**i
+            f.write('python dexom_python/enum_functions/diversity_enum.py -o %sdiv_enum_%i -m %s -r %s -p '
+                    '%s%s_solution_%i.csv -a %.5f -i %i --obj_tol %.4f -e %s --threshold %s --tol %s -t %i'
+                    % (directory, i, modelfile, weightfile, directory, rxnsols, i, a, iters, objtol, eps, thr, tol, t))
+    with open(directory+"runfiles.sh", "w+") as f:
+        f.write('#!/bin/bash\n#SBATCH --mail-type=ALL\n#SBATCH -J runfiles\n#SBATCH -o runout.out\n#SBATCH '
+                '-e runerr.out\ncd $SLURM_SUBMIT_DIR\nfor i in {0..%i}\ndo\n    dos2unix file_"$i".sh\n    sbatch'
+                ' file_"$i".sh\ndone' % (filenums-1))
+    return True
+
+
+def write_batch_script1(directory, username, modelfile, weightfile, reactionlist, imatsol, objtol, filenums=100, iters=100):
     for i in range(filenums):
         with open(directory+"file_"+str(i)+".sh", "w+") as f:
             f.write('#!/bin/bash\n#SBATCH -p workq\n#SBATCH --mail-type=ALL\n#SBATCH --mem=64G\n#SBATCH -c 24\n'
