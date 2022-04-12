@@ -1,5 +1,4 @@
 
-import six
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -26,43 +25,6 @@ def read_model(modelfile):
         print("cplex is not available or not properly installed")
 
     return model
-
-
-def clean_model(model, reaction_weights=None, full=False):
-    """
-    removes variables and constraints added to the model.solver during imat
-
-    Parameters
-    ----------
-    model: cobra.Model
-        a model that has previously been passed to imat
-    reaction_weights: dict
-        the same reaction weights used for the imat
-    full: bool
-        the same bool used for the imat calculation
-    """
-    if full:
-        for rxn in model.reactions:
-            rid = rxn.id
-            if "x_"+rid in model.solver.variables:
-                model.solver.remove(model.solver.variables["x_"+rid])
-                model.solver.remove(model.solver.variables["xf_"+rid])
-                model.solver.remove(model.solver.variables["xr_"+rid])
-                model.solver.remove(model.solver.constraints["xr_"+rid+"_upper"])
-                model.solver.remove(model.solver.constraints["xr_"+rid+"_lower"])
-                model.solver.remove(model.solver.constraints["xf_"+rid+"_upper"])
-                model.solver.remove(model.solver.constraints["xf_"+rid+"_lower"])
-    else:
-        for rid, weight in six.iteritems(reaction_weights):
-            if weight > 0. and "rh_"+rid+"_pos" in model.solver.variables:
-                model.solver.remove(model.solver.variables["rh_"+rid+"_pos"])
-                model.solver.remove(model.solver.variables["rh_"+rid+"_neg"])
-                model.solver.remove(model.solver.constraints["rh_"+rid+"_pos_bound"])
-                model.solver.remove(model.solver.constraints["rh_"+rid+"_neg_bound"])
-            elif weight < 0. and "rl_"+rid in model.solver.variables:
-                model.solver.remove(model.solver.variables["rl_"+rid])
-                model.solver.remove(model.solver.constraints["rl_"+rid+"_upper"])
-                model.solver.remove(model.solver.constraints["rl_"+rid+"_lower"])
 
 
 def check_model_options(model, timelimit=None, feasibility=None, mipgaptol=None, verbosity=None):
