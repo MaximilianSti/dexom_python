@@ -22,12 +22,16 @@ Parts of the imat code were taken from the driven package for data-driven constr
 
 These are the different functions which are available for context-specific network extraction
 
+### apply_gpr
+The `gpr_rules.py` script can be used to transform gene expression data into reaction weights, for a limited selection of models.  
+It uses the gene identifiers and gene-protein-reaction rules present in the model to connect the genes and reactions.  
+By default, continuous gene expression values/weights will be transformed into continuous reaction weights. 
+Using the `--convert` flag will instead create semi-quantitative reaction weights with values in {-1, 0, 1}. By default, the proportion of these three weights will be {25%, 50%, 25%}.
+
 ### iMAT
 `imat.py` contains a modified version of the iMAT algorithm as defined by [(Shlomi et al. 2008)](https://pubmed.ncbi.nlm.nih.gov/18711341/).  
 The main inputs of this algorithm are a model file, which must be supplied in a cobrapy-compatible format (SBML, JSON or MAT), and a reaction_weight file in which each reaction is attributed a score.  
 These reaction weights must be determined prior to launching imat, using the GPR rules present in the metabolic model.  
-The `gpr_rules.py` script can be used to transform gene expression data into reaction weights for a selection of models, using the gene identifiers present in the model to connect the genes and reactions.  
-By default, continuous gene weights will be transformed into continuous reaction weights. Using the `--convert` flag will instead create semi-quantitative reaction weights with values in [-1, 0, 1]
 
 The remaining inputs of imat are:
 - `epsilon`: the activation threshold of reactions with weight > 0
@@ -56,11 +60,11 @@ Each of these methods can be used on its own. The same model and reaction_weight
 Additional parameters for all 4 methods are:
 - `prev_sol`: a starting imat solution
 - `obj_tol`: a relative tolerance on the imat objective value for the optimality of the solutions  
-icut, maxiter, and div-enum also have:
+icut, maxiter, and div-enum also have two additional parameters:
 - `maxiter`: the maximum number of iterations to run
 - `full`: set to True to use the full-DEXOM implementation  
-As previously explained, the full-DEXOM implementation defines binary indicator variables for all reactions in the model. Although only the reactions with non-zero weights have an impact on the imat objective function, the distance maximization function which is used in maxdist and div-enum can make use of the binary indicators for all reactions. This increases the distance between the solutions, but requires significantly more computation time.  
-maxdist and div-enum also have:
+As previously explained, the full-DEXOM implementation defines binary indicator variables for all reactions in the model. Although only the reactions with non-zero weights have an impact on the imat objective function, the distance maximization function which is used in maxdist and div-enum can utilize the binary indicators for all reactions. This increases the distance between the solutions, but requires significantly more computation time.  
+maxdist and div-enum also have one additional parameter:  
 - `icut`: if True, an icut constraint will be applied to prevent duplicate solutions
 
 ## Parallelized DEXOM
@@ -88,7 +92,7 @@ The `main.py` script contains a simple example of the DEXOM workflow using one o
 
 ### Recon 2.2
 The recon2v2 folder contains the model and the differential gene expression data which was used to test this new implementation.  
-In order to produce reaction weights, you can call the model_functions script from the command line.  
+In order to produce reaction weights, you can call the `gpr_rules` script from the command line.  
 This will create a file named "pval_0-01_reactionweights.csv" in the recon2v2 folder:  
 ```
 python dexom_python/gpr_rules -m recon2v2/recon2v2_corrected.json -n recon2 -g recon2v2/pval_0-01_geneweights.csv -o recon2v2/pval_0-01_reactionweights
