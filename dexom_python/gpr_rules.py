@@ -25,12 +25,18 @@ def expression2qualitative(expression_file, column_idx=-1, percentage=25, method
 
     Parameters
     ----------
-    expression_file: path to file containing gene IDs in the first column and gene expression values in a later column
-    column_idx: column indexes containing gene expression values to be transformed. If -1, all columns will be transformed
-    percentage: percentage of genes to be used for determining high/low gene expression
-    method: one of "max", "mean" or "keep". chooses how to deal with genes containing multiple conflicting expression values
-    save: if True, saves the resulting gene weights
-    outpath: if save=True, the .csv file will be saved to this path
+    expression_file: str
+        path to file containing gene IDs in the first column and gene expression values in a later column
+    column_idx: int
+        column indexes containing gene expression values to be transformed. If -1, all columns will be transformed
+    percentage: float
+        percentage of genes to be used for determining high/low gene expression
+    method: str
+        one of "max", "mean" or "keep". chooses how to deal with genes containing multiple conflicting expression values
+    save: bool
+        if True, saves the resulting gene weights
+    outpath: str
+        if save=True, the .csv file will be saved to this path
 
     Returns
     -------
@@ -64,6 +70,18 @@ def expression2qualitative(expression_file, column_idx=-1, percentage=25, method
 
 
 def prepare_expr_split_gen_list(rxn, modelname):
+    """
+
+    Parameters
+    ----------
+    rxn: cobra.Reaction
+    modelname: str
+        The name of the model. Currently only supports human1, recon1, recon2, iMM1865, zebrafish1
+
+    Returns
+    -------
+
+    """
     if modelname == "recon2":
         expr_split = rxn.gene_reaction_rule.replace("(", "( ").replace(")", " )").split()
         expr_split = [s.replace(':', '_') if ':' in s else s for s in expr_split]
@@ -96,14 +114,18 @@ def prepare_expr_split_gen_list(rxn, modelname):
 
 def apply_gpr(model, gene_weights, modelname, save=True, filename="reaction_weights"):
     """
-    Applies the GPR rules from the human-GEM model for creating reaction weights
+    Applies the GPR rules from a given metabolic model for creating reaction weights
 
     Parameters
     ----------
-    model: a cobrapy model
-    gene_file: the path to a csv file containing gene scores
-    gene_weights: a dictionary containing gene IDs & weights
-    save: if True, saves the reaction weights as a csv file
+    model: cobra.Model
+        a cobrapy model
+    gene_weights: dict
+        a dictionary containing gene IDs & weights
+    modelname: str
+        the name of the model
+    save: bool
+        if True, saves the reaction weights as a csv file
 
     Returns
     -------

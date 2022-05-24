@@ -10,6 +10,23 @@ from dexom_python.model_functions import read_model, get_subsystems_from_model
 
 
 def Fischer_groups(model, solpath, outpath="test"):
+    """
+    !!! This only works if the pathway name is stored in the model.groups property !!!
+    For models where the pathways are stored in the model.reactions.subsystem property, use the Fischer_pathways function
+
+    Performs pathway over- and underrepresentation analysis
+
+    Parameters
+    ----------
+    solpath: file containing DEXOM solutions
+    subframe: csv file associating reactions with subsystems
+    sublist: list of subsystems
+    outpath: path to which results are saved
+
+    Returns
+    -------
+    over, under: pandas.DataFrames (saved as .csv files) containing -log10 BH-adjusted p-values
+    """
     df = pd.read_csv(solpath, dtype=int, index_col=0)
     df.columns = [r.id for r in model.reactions]
     pvalsu = {}
@@ -39,7 +56,7 @@ def Fischer_groups(model, solpath, outpath="test"):
 
     over.to_csv(outpath+"pathways_pvalues_over.csv")
     under.to_csv(outpath+"pathways_pvalues_under.csv")
-    return over, under, fdr
+    return over, under
 
 
 def Fisher_pathways(solpath, subframe, sublist, outpath=""):
@@ -58,7 +75,7 @@ def Fisher_pathways(solpath, subframe, sublist, outpath=""):
 
     Returns
     -------
-    csv files containing -log10 FDR-adjusted p-values
+    over, under: pandas.DataFrames (saved as .csv files) containing -log10 BH-adjusted p-values
     """
     df = pd.read_csv(solpath, dtype=int, index_col=0)
 
@@ -98,7 +115,7 @@ def Fisher_pathways(solpath, subframe, sublist, outpath=""):
 
     over.to_csv(outpath+"pathways_pvalues_over.csv")
     under.to_csv(outpath+"pathways_pvalues_under.csv")
-    return over, under, fdr
+    return over, under
 
 
 def plot_Fisher_pathways(filename_over, filename_under, sublist, outpath="pathway_enrichment"):
@@ -127,7 +144,6 @@ def plot_Fisher_pathways(filename_over, filename_under, sublist, outpath="pathwa
     rcParams['ytick.labelsize'] = 13
     under.boxplot(vert=False, widths=0.7)
     plt.plot(list(under.values)[0], ax.get_yticks(), 'ro')
-    # plt.xticks(ticks=[0, 10])
     plt.tight_layout()
     plt.subplots_adjust(top=0.95, bottom=0.05)
     plt.title("Underrepresentation analysis of active reactions per pathway", fontsize=15, loc='right', pad='20')

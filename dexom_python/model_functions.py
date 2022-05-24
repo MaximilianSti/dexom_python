@@ -28,7 +28,6 @@ def read_model(modelfile):
 
 
 def check_model_options(model, timelimit=None, feasibility=None, mipgaptol=None, verbosity=None):
-
     model.solver.configuration.timeout = timelimit
     model.tolerance = feasibility if feasibility else 1e-6
     model.solver.problem.parameters.mip.tolerances.mipgap.set(mipgaptol) if mipgaptol else None
@@ -42,7 +41,8 @@ def get_all_reactions_from_model(model, save=True, shuffle=True, out_path=""):
 
     Parameters
     ----------
-    model: a cobrapy model
+    model: cobra.Model
+
     save: bool
         by default, exports the reactions in a csv format
     shuffle: bool
@@ -51,7 +51,7 @@ def get_all_reactions_from_model(model, save=True, shuffle=True, out_path=""):
         output path
     Returns
     -------
-    A list of all reactions in the model
+    rxn_list: A list of all reactions in the model
     """
     rxn_list = [r.id for r in model.reactions]
     if save:
@@ -65,15 +65,19 @@ def get_all_reactions_from_model(model, save=True, shuffle=True, out_path=""):
 def get_subsystems_from_model(model, save=True, out_path=""):
     """
     Creates a list of all subsystems of a model and their associated reactions
+
     Parameters
     ----------
-    model: a cobrapy model
+    model: cobra.Model
+
     save: bool
 
     Returns
     -------
-    rxn_sub: a DataFrame with reaction names as index and subsystem name as column
-    sub_list: a list of subsystems
+    rxn_sub: pandas.DataFrame
+        a DataFrame with reaction names as index and subsystem name as column
+    sub_list: list
+        a list of subsystems
     """
 
     rxn_sub = {}
@@ -101,9 +105,10 @@ def save_reaction_weights(reaction_weights, filename):
     reaction_weights: dict
         a dictionary where keys = reaction IDs and values = weights
     filename: str
+
     Returns
     -------
-    the reaction_weights dict as a pandas DataFrame
+    reaction_weights: as a pandas.DataFrame
     """
     df = pd.DataFrame(reaction_weights.items(), columns=["reactions", "weights"])
     df.to_csv(filename)
@@ -114,6 +119,7 @@ def save_reaction_weights(reaction_weights, filename):
 def load_reaction_weights(filename, rxn_names="reactions", weight_names="weights"):
     """
     loads reaction weights from a .csv file
+
     Parameters
     ----------
     filename: str
@@ -125,7 +131,7 @@ def load_reaction_weights(filename, rxn_names="reactions", weight_names="weights
 
     Returns
     -------
-    a dict of reaction weights
+    reaction_weights: dict
     """
     df = pd.read_csv(filename)
     df.index = df[rxn_names]

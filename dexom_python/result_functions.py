@@ -135,17 +135,19 @@ def combine_solutions(sol_path):
 
 def plot_pca(solution_path, rxn_enum_solutions=None, save_name=""):
     """
-    Plots a 2-dimensional PCA
+    Plots a 2-dimensional PCA of enumeration solutions
 
     Parameters
     ----------
-    solution_path: csv file of enumeration solutions
-    rxn_enum_solutions: if specified, will plot these solutions in a different color
-    save_name: name of the file to save
+    solution_path: str
+        csv file of enumeration solutions
+    rxn_enum_solutions: str
+        csv file of enumeration solutions. If specified, will plot these solutions in a different color
+    save_name: str
+        name of the file to save
 
-    Returns
-    -------
-    the pca object
+    Returns:
+        sklearn.decomposition.PCA
     """
     X = pd.read_csv(solution_path, index_col=0)
 

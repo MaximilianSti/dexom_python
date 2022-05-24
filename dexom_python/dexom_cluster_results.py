@@ -6,7 +6,19 @@ import argparse
 
 
 def analyze_dexom_cluster_results(in_folder, out_folder, approach=1, filenums=100):
+    """
 
+    Parameters
+    ----------
+    in_folder: folder containing dexom results
+    out_folder: folder in which output files will be saved
+    approach: which parallelization approach was used (1, 2, or 3, see enum_functions/enumeration for details)
+    filenums: number of parallel dexom threads that were run
+
+    Returns
+    -------
+
+    """
     output_file = []
     # concatenating all .out files from the cluster
     if approach == 1 or approach == 3:
