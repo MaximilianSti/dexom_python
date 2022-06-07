@@ -16,18 +16,9 @@ def diversity_enum(model, reaction_weights, prev_sol, eps=1e-3, thr=1e-5, obj_to
                    out_path="enum_dexom", icut=True, full=False, save=False):
     """
     diversity-based enumeration
+
     Parameters
     ----------
-    model
-    reaction_weights
-    prev_sol
-    thr
-    obj_tol
-    maxiter
-    dist_anneal
-    icut
-    only_ones
-
     model: cobrapy Model
     reaction_weights: dict
         keys = reactions and values = weights
@@ -49,9 +40,10 @@ def diversity_enum(model, reaction_weights, prev_sol, eps=1e-3, thr=1e-5, obj_to
         if True, the full-DEXOM implementation is used
     save: bool
         if True, every individual solution is saved in the iMAT solution format
+
     Returns
     -------
-
+    solution: an EnumSolution object
     """
     tol = model.solver.configuration.tolerances.feasibility
     times = []

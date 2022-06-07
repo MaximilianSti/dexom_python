@@ -91,14 +91,15 @@ def create_maxdist_objective(model, reaction_weights, prev_sol, prev_sol_bin, on
 def maxdist(model, reaction_weights, prev_sol, threshold=1e-4, obj_tol=1e-2, maxiter=10, out_path="maxdist", icut=True,
             full=False, only_ones=False):
     """
-    Parameters
     maximal distance enumeration
+
+    Parameters
     ----------
     model: cobrapy Model
     reaction_weights: dict
-        keys = reactions and values = weights
-    prev_sol: Solution instance
-        a previous imat solution
+        keys are reactions and values are weights
+    prev_sol: Solution object
+        a previously computed imat solution
     threshold: float
         detection threshold of activated reactions
     obj_tol: float
@@ -107,6 +108,7 @@ def maxdist(model, reaction_weights, prev_sol, threshold=1e-4, obj_tol=1e-2, max
         maximum number of solutions to check for
     only_ones: bool
         determines if the hamming distance is only calculated with ones, or with ones & zeros
+
     Returns
     -------
 

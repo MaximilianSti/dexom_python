@@ -12,6 +12,15 @@ from dexom_python.model_functions import get_all_reactions_from_model
 
 
 class EnumSolution(object):
+    """
+    class for solutions of enumeration methods
+
+    Parameters
+    ----------
+    solutions: pandas dataframe containing flux values with reaction ids as index
+    binary: list containing reaction activity (0 for inactive, 1 for active)
+    objective_value: objective value returned by the solver at the end of the optimization
+    """
     def __init__(self, solutions, binary, objective_value):
         self.solutions = solutions
         self.binary = binary
