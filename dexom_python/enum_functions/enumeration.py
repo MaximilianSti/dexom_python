@@ -44,7 +44,24 @@ def create_enum_variables(model, reaction_weights, eps=1e-2, thr=1e-5, full=Fals
 
 
 def get_recent_solution_and_iteration(dirpath, startsol_num):
-    paths = sorted(list(Path(dirpath).glob('*solution_*.csv')), key=os.path.getctime)
+    """
+    This functions fetches a solution from a given directory. The solutions are ordered by creation time, and one
+    solution is picked using an exponential distribution (meaning that the most recent solution has the highest
+    probability of being chosen)
+
+    Parameters
+    ----------
+    dirpath: str
+        a directory containing imat or enumeration solutions
+    startsol_num: int
+        the number of starting solutions present in the directory
+
+    Returns
+    -------
+    solution: a Solution object
+    iteration: an int which
+    """
+    paths = sorted(list(Path(dirpath).glob('*solution*.csv')), key=os.path.getctime)
     paths.reverse()
     solpath = paths[int(np.random.exponential(5))]
     solution, binary = read_solution(solpath)
