@@ -98,13 +98,18 @@ def apply_gpr(model, gene_weights, save=True, filename='reaction_weights', dupli
         gene_weights = gene_weights.to_dict()
 
     reaction_weights = {}
-    gene_weights = {str(k): float(v) for k, v in gene_weights.items()}
+    gene_weight_dict = {}
+    for k, v in gene_weights.items():
+        if isinstance(k, float):  # pandas library reads NCBI gene IDs as float, they must be converted to int, then str
+            gene_weight_dict[str(int(k))] = float(v)
+        else:
+            gene_weight_dict[str(k)] = float(v)
     for rxn in model.reactions:
         if len(rxn.genes) > 0:
             gen_list = [g.id for g in rxn.genes]
             expr_split = rxn.gene_reaction_rule.replace('(', '( ').replace(')', ' )').split()
             expr_split = ['g_' + re.sub(':|\.|-', '_', s) if s in gen_list else s for s in expr_split]
-            new_weights = {'g_' + re.sub(':|\.|-', '_', g): gene_weights.get(g, 0) for g in gen_list}
+            new_weights = {'g_' + re.sub(':|\.|-', '_', g): gene_weight_dict.get(g, 0.) for g in gen_list}
             negweights = []
             for g, v in new_weights.items():
                 if v < 0:
@@ -117,6 +122,7 @@ def apply_gpr(model, gene_weights, save=True, filename='reaction_weights', dupli
             reaction_weights[rxn.id] = weight
         else:
             reaction_weights[rxn.id] = 0.
+    reaction_weights = {str(k): float(v) for k, v in reaction_weights.items()}
     if save:
         save_reaction_weights(reaction_weights, filename+'.csv')
     return reaction_weights
